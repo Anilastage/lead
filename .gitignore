@@ -1,0 +1,11 @@
+.env
+.streamlit/secrets.toml
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/profile.json
+__pycache__/
+*.pyc
+.ruff_cache/
+output/
+.DS_Store
