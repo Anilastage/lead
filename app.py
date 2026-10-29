@@ -147,6 +147,14 @@ def get_leads():
     return None
 
 
+def contact_counts(df):
+    if df is None or df.empty:
+        return 0, 0
+    emails = int((df["email"].str.len() > 0).sum())
+    phones = int((df["phone"].str.len() > 0).sum())
+    return emails, phones
+
+
 def suppressed_for_row(row, suppressed):
     email = str(row.get("email", "")).strip().lower()
     phone = only_digits(row.get("phone", ""))
@@ -434,22 +442,43 @@ def page_leads():
 
         a, b = st.columns([1, 3])
         country = a.text_input("Default country code", key="default_country", help="Used for numbers without a country code, e.g. 91 for India.")
+        if not new_mapping.get("email") and not new_mapping.get("phone"):
+            st.warning("No Email or Phone column is mapped. Select the correct columns above before building.")
         if b.button("Build lead list", type="primary"):
             try:
                 result, stats = lead_utils.process_leads(raw, new_mapping, country)
             except Exception as exc:
                 st.error(f"Could not build the list: {exc}")
             else:
+                emails, phones = contact_counts(result)
                 if result.empty:
                     st.error("No usable rows found. Map at least an email or phone column.")
+                elif emails == 0 and phones == 0:
+                    st.error(
+                        "The list was built, but no valid emails or phone numbers were found. "
+                        "Change the Email or Phone / WhatsApp mapping above and click Build lead list again. "
+                        "Your saved list has not been changed."
+                    )
+                    if new_mapping.get("phone") and new_mapping["phone"] in raw.columns:
+                        column = new_mapping["phone"]
+                        samples = [str(value) for value in raw[column].dropna().head(5).tolist()]
+                        with st.expander("Contact detection details", expanded=True):
+                            st.write(f"Phone column: {column}")
+                            st.write("Sample raw values:", samples)
+                    elif new_mapping.get("email") and new_mapping["email"] in raw.columns:
+                        column = new_mapping["email"]
+                        samples = [str(value) for value in raw[column].dropna().head(5).tolist()]
+                        with st.expander("Contact detection details", expanded=True):
+                            st.write(f"Email column: {column}")
+                            st.write("Sample raw values:", samples)
                 else:
                     st.session_state.leads = result
                     st.session_state.messages = storage.get_messages(result["lead_id"].tolist())
                     st.session_state.import_stats = stats
                     save_leads_state()
                     set_flash(
-                        f"Built {stats['kept']} leads. Dropped {stats['dropped']} empty rows and "
-                        f"{stats['duplicates']} duplicates."
+                        f"Built {stats['kept']} leads ({emails} emails, {phones} phones). "
+                        f"Dropped {stats['dropped']} empty rows and {stats['duplicates']} duplicates."
                     )
                     st.rerun()
 
@@ -460,9 +489,11 @@ def page_leads():
 
     if st.session_state.get("import_stats"):
         stats = st.session_state.import_stats
+        emails, phones = contact_counts(df)
         st.caption(
             f"Last import: {stats['rows_read']} rows read, {stats['kept']} kept, "
-            f"{stats['duplicates']} duplicates removed, {stats['dropped']} empty rows."
+            f"{stats['duplicates']} duplicates removed, {stats['dropped']} empty rows. "
+            f"Contactable: {emails} emails, {phones} phones."
         )
     if st.session_state.get("loaded_from_db"):
         st.info("Loaded the last saved lead list from the app database.")
