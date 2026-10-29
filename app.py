@@ -158,7 +158,7 @@ def contact_counts(df):
 def suppressed_for_row(row, suppressed):
     email = str(row.get("email", "")).strip().lower()
     phone = only_digits(row.get("phone", ""))
-    return (email and email in suppressed) or (phone and phone in suppressed)
+    return bool((email and email in suppressed) or (phone and phone in suppressed))
 
 
 def missing_message_rows(df):
@@ -520,7 +520,7 @@ def page_leads():
 
     filtered = df.copy()
     filtered["contacted"] = filtered["lead_id"].astype(str).isin(contacted_ids)
-    filtered["suppressed"] = filtered.apply(lambda row: suppressed_for_row(row, suppressed), axis=1)
+    filtered["suppressed"] = filtered.apply(lambda row: suppressed_for_row(row, suppressed), axis=1).astype(bool)
 
     if search:
         needle = search.lower()
@@ -656,7 +656,7 @@ def page_ai():
 
     suppressed = storage.suppressed_values()
     working = df.copy()
-    working["suppressed"] = working.apply(lambda row: suppressed_for_row(row, suppressed), axis=1)
+    working["suppressed"] = working.apply(lambda row: suppressed_for_row(row, suppressed), axis=1).astype(bool)
     working = working[~working["suppressed"]]
     working = working[(working["email"].str.len() > 0) | (working["phone"].str.len() > 0)]
     if working.empty:
